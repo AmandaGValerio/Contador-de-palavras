@@ -100,7 +100,8 @@ TItem desenfileirarEPegar(TFila &f){
     }
 }
 /************************************************************************************/
-void converterletras(string linha){
+
+void converterletras(string &linha){
 	//converte todas as letras para minusculo
 	for (int i = 0; i < linha.size(); i++){
 		linha[i] = tolower(linha[i]);
@@ -130,10 +131,43 @@ int main(){
 	
 	char *result;
 	do {
-	result = fgets (linhaLida, 100, arq);
-	string linha = linhaLida;
-	
-	cout << linha << endl;	
+		//le a linha do arquivo
+		result = fgets (linhaLida, 100, arq);
+		string linha = linhaLida;
+		
+		//exibe na tela
+		//trocar por escrever na fila
+		cout << linha << endl; 
+		
+		//colocar td em caixa baixa
+		converterletras(linha);
+		converterletras(palavra);
+		
+		//função para buscar na string
+		int posPalavra = 0;
+		bool ok = false;
+		//enquanto ainda há caracteres na linha para ser lido
+		for (int pos = 0; pos < linha.length(); pos++){
+			//se os caracteres correspondem...
+			if (linha[pos] == palavra[posPalavra]){
+				//esta pode ser a palavra
+				ok = true;
+				//então incrementa o index
+				posPalavra++;
+			} 
+			else{
+				if(ok == true && posPalavra == palavra.length()){
+					//se corresponde inteira, então incrementa o numero de repetições
+					repeticoes++;
+				}
+				//a paravra não era correspondente
+				ok = false;
+				//reseta o index
+				posPalavra = 0;
+			}
+		}
+		
+			
 	}while (result != NULL); // ESTA REPETINDO A ULTIMA LINHA
 	
 	//exibe a quantidade de vezes que aquela palavra foi encontrada
