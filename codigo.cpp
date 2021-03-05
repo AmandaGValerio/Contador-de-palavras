@@ -6,44 +6,37 @@ Autora: Amanda Gabriela Valério
 #include <string>
 #include <string.h>
 #include <cctype>
-#include "fila.h"
+#include <omp.h>
 
 using namespace std;
 
-/************************************************************************************/
 struct TItem{
     string linha;
 };
 
-struct TCelula
-{
+struct TCelula{
     TItem item;
     TCelula *proximo;
 };
 
-struct TFila
-{
+struct TFila{
     TCelula *frente;
     TCelula *tras;
 };
 
 /// Operações do TAD Fila
-void criarFilaVazia(TFila &f)
-{
+void criarFilaVazia(TFila &f){
    f.frente = new TCelula;
    f.tras = f.frente;
    f.frente->proximo = NULL;
    cout << "Fila criada com sucesso!" << endl;
-
 }
 
-bool estaVazia(TFila &f)
-{
+bool estaVazia(TFila &f){
     return (f.tras == f.frente);
 }
 
-void enfileirar(TItem i, TFila &f)// igual ao inserir da lista por ponteiros...
-{
+void enfileirar(TItem i, TFila &f){// igual ao inserir da lista por ponteiros...
     f.tras->proximo = new TCelula;
     f.tras = f.tras->proximo;
     f.tras->item = i;
@@ -52,7 +45,7 @@ void enfileirar(TItem i, TFila &f)// igual ao inserir da lista por ponteiros...
 
 void mostrarFila(TFila f){
 
-TCelula *celAux;
+	TCelula *celAux;
 
     if (estaVazia(f)){
         cout << "Não há nada para mostrar!" << endl;
@@ -66,19 +59,6 @@ TCelula *celAux;
             celAux = celAux->proximo;
         }
         cout << "-----------------------------" << endl;
-    }
-}
-
-void desenfileirar(TFila &f){
-    TCelula *celAux;
-
-    if (estaVazia(f)){
-        cout << "Não há itens para desenfileirar!" << endl;
-    }
-    else{
-        celAux = f.frente;
-        f.frente = f.frente->proximo;
-        delete celAux;
     }
 }
 
@@ -99,20 +79,22 @@ TItem desenfileirarEPegar(TFila &f){
         return iAux;
     }
 }
-/************************************************************************************/
 
-void converterletras(string &linha){
-	//converte todas as letras para minusculo
-	for (int i = 0; i < linha.size(); i++){
-		linha[i] = tolower(linha[i]);
-	}
-}
+/************************************************************************************/
 
 int main(){
 	
 	string palavra; //palavra a ser buscada
 	char linhaLida[100]; //linha lida do arquivo
 	int repeticoes = 0;
+	int vetRepet[30];
+	string bufferLido;
+	bool finalizado = false, liberado = true;
+	
+	//criando a fila
+	TFila fila;
+    TItem iAux;
+    criarFilaVazia(fila);
 	
 	//pegando a palavra para buscar
 	cout << "Digite a palavra que você quer buscar: ";
@@ -129,48 +111,76 @@ int main(){
 	//se arquivo aberto com sucesso
 	cout << "Buscando..." << endl;
 	
-	char *result;
-	do {
-		//le a linha do arquivo
-		result = fgets (linhaLida, 100, arq);
-		string linha = linhaLida;
+	//inicia a paralelisação
+	//quando não identifica a quantidade de threads, o computador utiliza a quantidade de processadores físicos
+	#pragma omp parallel
+	{	
+		#pragma omp master 
+		{
+			//thread produtora
+			char *result = fgets (linhaLida, 100, arq);
+			while (result != NULL){
+				//cout << "entrei" << endl;
+				iAux.linha = linhaLida;
+				//adiciona na fila
+				//iAux.linha = linha;
+				liberado = false;
+				enfileirar(iAux, fila);
+				liberado = true;
+				//le a linha do arquivo
+				result = fgets (linhaLida, 100, arq);
+			}
+			finalizado = true;
+		}
 		
-		//exibe na tela
-		//trocar por escrever na fila
-		cout << linha << endl; 
-		
-		//colocar td em caixa baixa
-		converterletras(linha);
-		converterletras(palavra);
-		
+		//cout << "sai" << endl;
+		//cout << estaVazia(fila) << true << endl;
 		//função para buscar na string
 		int posPalavra = 0;
 		bool ok = false;
-		//enquanto ainda há caracteres na linha para ser lido
-		for (int pos = 0; pos < linha.length(); pos++){
-			//se os caracteres correspondem...
-			if (linha[pos] == palavra[posPalavra]){
-				//esta pode ser a palavra
-				ok = true;
-				//então incrementa o index
-				posPalavra++;
-			} 
-			else{
-				if(ok == true && posPalavra == palavra.length()){
-					//se corresponde inteira, então incrementa o numero de repetições
-					repeticoes++;
-				}
-				//a paravra não era correspondente
-				ok = false;
-				//reseta o index
-				posPalavra = 0;
-			}
-		}
+		//cout << "f = " << finalizado << "v = " << estaVazia(fila) << endl;
+		while (finalizado =! true || estaVazia(fila) == false){
+		if (liberado == true){
 		
+			#pragma omp critical
+			iAux = desenfileirarEPegar(fila);
+
+			bufferLido = iAux.linha;
+			//enquanto ainda há caracteres na linha para ser lido
+			for (int pos = 0; pos < bufferLido.length(); pos++){
+				//se os caracteres correspondem...
+				if (tolower(bufferLido[pos]) == tolower(palavra[posPalavra])){
+					//esta pode ser a palavra
+					ok = true;
+					//então incrementa o index
+					posPalavra++;
+				} 
+				else{
+					if(ok == true && posPalavra == palavra.length()){
+						//se corresponde inteira, então incrementa o numero de repetições
+						vetRepet[repeticoes] = omp_get_thread_num();
+						repeticoes++;
+						//cout << omp_get_thread_num() << endl;
+					}
+					//a palavra não era correspondente
+					ok = false;
+					//reseta o index
+					posPalavra = 0;
+				}
+			}
+		}}
+		//cout << "terminei " << omp_get_thread_num() << endl;
+		printf(" terminei %i", omp_get_thread_num());
 			
-	}while (result != NULL); // ESTA REPETINDO A ULTIMA LINHA
+	}
 	
 	//exibe a quantidade de vezes que aquela palavra foi encontrada
+	//	mostrarFila(fila);
 	cout << "Essa palavra foi encontrada " << repeticoes << " vezes" << endl;
+	
+	for (int i = 0; i < repeticoes; i++){
+		cout << vetRepet[i];
+	}
+	
 	return 0;
 }
