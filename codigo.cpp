@@ -1,6 +1,6 @@
-/**********************
+/********************************
 Autora: Amanda Gabriela Valério
-**********************/
+********************************/
 
 #include <iostream>
 #include <string>
@@ -81,14 +81,12 @@ TItem desenfileirarEPegar(TFila &f){
 }
 
 /************************************************************************************/
-
 int main(){
 	
 	string palavra; //palavra a ser buscada
 	char linhaLida[100]; //linha lida do arquivo
 	int repeticoes = 0;
-	int vetRepet[30];
-	string bufferLido;
+	int vetRepet[50];
 	bool finalizado = false, liberado = true;
 	
 	//criando a fila
@@ -115,15 +113,14 @@ int main(){
 	//quando não identifica a quantidade de threads, o computador utiliza a quantidade de processadores físicos
 	#pragma omp parallel
 	{	
-		#pragma omp master 
+		#pragma omp single
 		{
 			//thread produtora
+			vetRepet[repeticoes] = omp_get_thread_num();
 			char *result = fgets (linhaLida, 100, arq);
 			while (result != NULL){
-				//cout << "entrei" << endl;
 				iAux.linha = linhaLida;
 				//adiciona na fila
-				//iAux.linha = linha;
 				liberado = false;
 				enfileirar(iAux, fila);
 				liberado = true;
@@ -133,54 +130,43 @@ int main(){
 			finalizado = true;
 		}
 		
-		//cout << "sai" << endl;
-		//cout << estaVazia(fila) << true << endl;
 		//função para buscar na string
 		int posPalavra = 0;
 		bool ok = false;
-		//cout << "f = " << finalizado << "v = " << estaVazia(fila) << endl;
 		while (finalizado =! true || estaVazia(fila) == false){
-		if (liberado == true){
-		
-			#pragma omp critical
-			iAux = desenfileirarEPegar(fila);
-
-			bufferLido = iAux.linha;
-			//enquanto ainda há caracteres na linha para ser lido
-			for (int pos = 0; pos < bufferLido.length(); pos++){
-				//se os caracteres correspondem...
-				if (tolower(bufferLido[pos]) == tolower(palavra[posPalavra])){
-					//esta pode ser a palavra
-					ok = true;
-					//então incrementa o index
-					posPalavra++;
-				} 
-				else{
-					if(ok == true && posPalavra == palavra.length()){
-						//se corresponde inteira, então incrementa o numero de repetições
-						vetRepet[repeticoes] = omp_get_thread_num();
-						repeticoes++;
-						//cout << omp_get_thread_num() << endl;
+			if (liberado == true){
+				#pragma omp critical
+				iAux = desenfileirarEPegar(fila);
+				string bufferLido = iAux.linha;
+				//enquanto ainda há caracteres na linha para ser lido
+				for (int pos = 0; pos < bufferLido.length(); pos++){
+					//se os caracteres correspondem...
+					if (tolower(bufferLido[pos]) == tolower(palavra[posPalavra])){
+						//esta pode ser a palavra
+						ok = true;
+						//então incrementa o index
+						posPalavra++;
+					} 
+					else{
+						if(ok == true && posPalavra == palavra.length()){
+							//se corresponde inteira, então incrementa o numero de repetições
+							vetRepet[repeticoes] = omp_get_thread_num();
+							repeticoes++;
+							cout << omp_get_thread_num() << endl;
+						}
+						//a palavra não era correspondente
+						ok = false;
+						//reseta o index
+						posPalavra = 0;
 					}
-					//a palavra não era correspondente
-					ok = false;
-					//reseta o index
-					posPalavra = 0;
 				}
 			}
-		}}
-		//cout << "terminei " << omp_get_thread_num() << endl;
-		printf(" terminei %i", omp_get_thread_num());
-			
+		}
+		printf(" terminei %i\n", omp_get_thread_num());
 	}
 	
 	//exibe a quantidade de vezes que aquela palavra foi encontrada
-	//	mostrarFila(fila);
 	cout << "Essa palavra foi encontrada " << repeticoes << " vezes" << endl;
-	
-	for (int i = 0; i < repeticoes; i++){
-		cout << vetRepet[i];
-	}
 	
 	return 0;
 }
