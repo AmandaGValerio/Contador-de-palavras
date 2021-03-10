@@ -10,6 +10,12 @@ Autora: Amanda Gabriela Valério
 
 using namespace std;
 
+
+/*************************************************************************/
+//códigos para criação e manipulação da estrutura de dados Fila encadeada, 
+//inspirados no livro Estruturas de Dados, Ziviane
+
+
 struct TItem{
     string linha;
 };
@@ -29,7 +35,6 @@ void criarFilaVazia(TFila &f){
    f.frente = new TCelula;
    f.tras = f.frente;
    f.frente->proximo = NULL;
-   cout << "Fila criada com sucesso!" << endl;
 }
 
 bool estaVazia(TFila &f){
@@ -47,10 +52,7 @@ void mostrarFila(TFila f){
 
 	TCelula *celAux;
 
-    if (estaVazia(f)){
-        cout << "Não há nada para mostrar!" << endl;
-    }
-    else{
+    if (estaVazia(f) == false){
         celAux = f.frente->proximo;
 
         while (celAux != NULL)
@@ -58,7 +60,6 @@ void mostrarFila(TFila f){
             cout << celAux->item.linha  << endl;
             celAux = celAux->proximo;
         }
-        cout << "-----------------------------" << endl;
     }
 }
 
@@ -67,7 +68,6 @@ TItem desenfileirarEPegar(TFila &f){
     TItem iAux;
 
     if (estaVazia(f)){
-        cout << "Não há itens para desenfileirar!" << endl;
         iAux.linha = " ";
         return iAux;
     }
@@ -83,10 +83,12 @@ TItem desenfileirarEPegar(TFila &f){
 /************************************************************************************/
 int main(){
 	
+	//variaveis declaradas antes da paralelização são usadas por todas as threads
+	//enquanto as variaveis declaradas dentro da thread tem um pouco mais de proteção
 	string palavra; //palavra a ser buscada
-	char linhaLida[100]; //linha lida do arquivo
 	int repeticoes = 0;
-	int vetRepet[50];
+	//int vetRepet[50]; //variável para debug
+	int idProdutor;
 	bool finalizado = false, liberado = true;
 	
 	//criando a fila
@@ -95,7 +97,7 @@ int main(){
     criarFilaVazia(fila);
 	
 	//pegando a palavra para buscar
-	cout << "Digite a palavra que você quer buscar: ";
+	cout << "Digite a palavra que voce quer buscar: ";
 	cin >> palavra;
 	
 	//abre arquivo
@@ -116,57 +118,75 @@ int main(){
 		#pragma omp single
 		{
 			//thread produtora
-			vetRepet[repeticoes] = omp_get_thread_num();
+			idProdutor = omp_get_thread_num();
+			//faz a primeira leitura
+			char linhaLida[100]; //linha lida do arquivo
 			char *result = fgets (linhaLida, 100, arq);
+			//entra em um laço que lê todo o arquivo
 			while (result != NULL){
+				//adiciona na fila, realizando o controle
 				iAux.linha = linhaLida;
-				//adiciona na fila
 				liberado = false;
+				//a diretiva critical ajuda a proteger o endereço de memória
+				#pragma omp critical
 				enfileirar(iAux, fila);
 				liberado = true;
 				//le a linha do arquivo
 				result = fgets (linhaLida, 100, arq);
 			}
+			//ao terminar confirma
 			finalizado = true;
 		}
 		
-		//função para buscar na string
-		int posPalavra = 0;
-		bool ok = false;
-		while (finalizado =! true || estaVazia(fila) == false){
-			if (liberado == true){
-				#pragma omp critical
-				iAux = desenfileirarEPegar(fila);
-				string bufferLido = iAux.linha;
-				//enquanto ainda há caracteres na linha para ser lido
-				for (int pos = 0; pos < bufferLido.length(); pos++){
-					//se os caracteres correspondem...
-					if (tolower(bufferLido[pos]) == tolower(palavra[posPalavra])){
-						//esta pode ser a palavra
-						ok = true;
-						//então incrementa o index
-						posPalavra++;
-					} 
-					else{
-						if(ok == true && posPalavra == palavra.length()){
-							//se corresponde inteira, então incrementa o numero de repetições
-							vetRepet[repeticoes] = omp_get_thread_num();
-							repeticoes++;
-							cout << omp_get_thread_num() << endl;
+		//threads dos consumidores
+		//depois de encontrar a diretiva single, o restante das threads segue
+		// para o restante do código, copia entre as threads e executa
+		//a verificação acontece pelo número do ID
+		if (omp_get_thread_num() != idProdutor){
+			int posPalavra = 0;
+			bool ok = false;
+			//enquanto ainda tiver texto para ler e apenas quando a fila conter elementos
+			while (finalizado =! true || estaVazia(fila) == false){
+				//se a fila não estiver sendo usada
+				if (liberado == true){
+					//desenfileira
+					//a diretiva critical ajuda a proteger o endereço de memória
+					#pragma omp critical
+					iAux = desenfileirarEPegar(fila);
+					//armazena em uma outra variável para evitar bugs
+					string bufferLido = iAux.linha;
+					//enquanto ainda há caracteres na linha para ser lido
+					for (int pos = 0; pos < bufferLido.length(); pos++){
+						//se os caracteres correspondem...
+						if (tolower(bufferLido[pos]) == tolower(palavra[posPalavra])){
+							//esta pode ser a palavra
+							ok = true;
+							//então incrementa o index
+							posPalavra++;
+						} 
+						else{
+							//se corresponde inteira
+							if(ok == true && posPalavra == palavra.length()){
+								//vetor para debug do código
+								//vetRepet[repeticoes] = omp_get_thread_num();
+								//então incrementa o numero de repetições
+								repeticoes++;
+							}
+							//reseta o contador, pois ou não era correspondente ou já foi confirmada
+							ok = false;
+							//reseta o index
+							posPalavra = 0;
 						}
-						//a palavra não era correspondente
-						ok = false;
-						//reseta o index
-						posPalavra = 0;
 					}
 				}
 			}
 		}
-		printf(" terminei %i\n", omp_get_thread_num());
 	}
 	
 	//exibe a quantidade de vezes que aquela palavra foi encontrada
 	cout << "Essa palavra foi encontrada " << repeticoes << " vezes" << endl;
+	//codigo para debug
+	//cout << idProdutor;
 	
 	return 0;
 }
